@@ -1,0 +1,87 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Functions ---
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Product Validation ---
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.price is number && data.price >= 0 &&
+             data.category is string &&
+             data.imageUrl is string &&
+             (!('stock' in data) || data.stock is int);
+    }
+
+    match /products/{productId} {
+      // Publicly viewable catalog
+      allow get: if isValidId(productId);
+      allow list: if true;
+      
+      // Allow authenticated users to create products (for seeding/demo)
+      // Enforce validation to prevent junk data
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      
+      // Keep update/delete restricted to admins
+      allow update, delete: if isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // --- User Cart ---
+    function isValidCartItem(data) {
+      return data.productId is string && 
+             data.quantity is int && data.quantity > 0 && data.quantity <= 99;
+    }
+
+    match /users/{userId}/cart/{itemId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidCartItem(incoming());
+      allow update: if isOwner(userId) && isValidCartItem(incoming()) && 
+                    incoming().diff(existing()).affectedKeys().hasOnly(['quantity']);
+      allow delete: if isOwner(userId);
+    }
+
+    // --- User Orders ---
+    match /users/{userId}/orders/{orderId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId); // We'd validate items/total here
+      allow update, delete: if false; // Orders are immutable once placed
+    }
+
+    // --- Admin Check ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+    }
+  }
+}
