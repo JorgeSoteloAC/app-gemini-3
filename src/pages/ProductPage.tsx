@@ -6,6 +6,7 @@ import { Product } from '../types';
 import { motion } from 'motion/react';
 import { ShoppingCart, ArrowLeft, Shield, Truck, RotateCcw } from 'lucide-react';
 import { useCart } from '../hooks/useCart';
+import { MOCK_PRODUCTS } from '../constants/products';
 
 export function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -135,22 +136,4 @@ export function ProductPage() {
   );
 }
 
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Neural Engine M4X',
-    price: 1299.00,
-    category: 'processors',
-    imageUrl: 'https://images.unsplash.com/photo-1591405351990-4726e331f141?w=800&auto=format&fit=crop&q=60',
-    description: 'The Neural Engine M4X is a high-performance heterogeneous computing platform designed for AI and machine learning workloads. Featuring a custom-developed systolic array architecture, it delivers unmatched TOPS-per-watt efficiency for real-time inference at the edge.'
-  },
-  {
-    id: '2',
-    name: 'Quantum X-Link Laptop',
-    price: 2499.00,
-    category: 'laptops',
-    imageUrl: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&auto=format&fit=crop&q=60',
-    description: 'The Quantum X-Link is built for users who demand extreme performance without compromise. Housed in a precision-milled aerospace-grade aluminum chassis, it features an advanced liquid-metal cooling system that allows the unlocked components to run at maximum thermal capacity.'
-  },
-  // ... more can be added if needed, but HomePage has them too
-];
+

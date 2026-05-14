@@ -6,6 +6,9 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { ShoppingCart, ArrowRight, Cpu, Laptop, Smartphone, Speaker } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { useCart } from '../hooks/useCart';
+
+import { MOCK_PRODUCTS } from '../constants/products';
 
 const CATEGORIES = [
   { id: 'all', name: 'ALL_PRODUCTS', icon: SearchIcon },
@@ -32,28 +35,38 @@ export function HomePage() {
         const q = query(collection(db, path), orderBy('createdAt', 'desc'), limit(12));
         const snapshot = await getDocs(q);
         
-        if (snapshot.empty && user) {
-          console.log("Seeding products...");
+        if (user) {
+          const namesInDb = new Set(snapshot.docs.map(doc => doc.data().name));
+          let seededAny = false;
+
           for (const p of MOCK_PRODUCTS) {
-            const { id, ...rest } = p;
-            await addDoc(collection(db, path), {
-              ...rest,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
+            if (!namesInDb.has(p.name)) {
+              console.log(`Seeding product: ${p.name}`);
+              const { id, ...rest } = p;
+              await addDoc(collection(db, path), {
+                ...rest,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+              });
+              seededAny = true;
+            }
           }
-          // Fetch again after seeding
-          const retrySnapshot = await getDocs(q);
-          const data = retrySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-          setProducts(data);
-        } else {
+
+          if (seededAny) {
+            const retrySnapshot = await getDocs(q);
+            const data = retrySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+            setProducts(data);
+          } else if (!snapshot.empty) {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+            setProducts(data);
+          }
+        } else if (!snapshot.empty) {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
           setProducts(data);
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, path);
         console.error("Error with products:", error);
-        // Fallback to mock data on ANY error so the UI still works
         setProducts(MOCK_PRODUCTS);
       } finally {
         setLoading(false);
@@ -66,88 +79,136 @@ export function HomePage() {
     ? products 
     : products.filter(p => p.category === activeCategory);
 
+  const featuredProduct = products[0] || MOCK_PRODUCTS[0];
+
   return (
     <div className="space-y-12">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden bg-[#141414] text-[#E4E3E0] p-8 md:p-16 rounded-sm">
-        <div className="relative z-10 max-w-2xl space-y-6">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-          >
-            <span className="font-mono text-[10px] uppercase tracking-[0.3em] opacity-50">Precision Electronics // v2.6</span>
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tighter uppercase leading-[0.9] mt-2">
-              Next Generation <br /> Performance
-            </h1>
-          </motion.div>
-          <motion.p 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="text-sm max-w-md font-mono"
-          >
-            Engineered for high-intensity workflows. Industrial grade hardware for the modern creative professional.
-          </motion.p>
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-          >
-            <button className="bg-[#E4E3E0] text-[#141414] px-6 py-3 font-mono text-xs font-bold uppercase flex items-center gap-2 hover:bg-white transition-colors group">
-              Explore Catalog <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-            </button>
-          </motion.div>
+      {/* 01 // SYSTEM_SPOTLIGHT */}
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-px bg-[#141414] border border-[#141414] rounded-sm overflow-hidden">
+        <div className="lg:col-span-7 bg-[#E4E3E0] p-8 md:p-16 flex flex-col justify-between min-h-[500px]">
+          <div className="space-y-6">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.4em] text-[#141414]/50 flex items-center gap-2">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" /> SYSTEM_SPOTLIGHT // v2.6.0
+              </span>
+              <h1 className="text-6xl md:text-8xl font-bold tracking-tighter uppercase leading-[0.85] mt-4">
+                {featuredProduct.name}
+              </h1>
+            </motion.div>
+            <p className="font-mono text-xs max-w-md opacity-60 leading-relaxed uppercase">
+              {featuredProduct.description}
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-6 mt-8">
+            <Link to={`/product/${featuredProduct.id}`}>
+              <button className="bg-[#141414] text-[#E4E3E0] px-8 py-4 font-mono text-xs font-bold uppercase tracking-[0.2em] hover:bg-[#222] transition-colors flex items-center gap-3">
+                Initialize_Module <ArrowRight size={14} />
+              </button>
+            </Link>
+            <div className="flex flex-col">
+              <span className="font-mono text-[9px] uppercase opacity-40">MSRP_VAL</span>
+              <span className="font-mono font-bold">${featuredProduct.price.toFixed(2)}</span>
+            </div>
+          </div>
         </div>
         
-        {/* Background Decorative Element */}
-        <div className="absolute right-[-10%] top-[-10%] w-[60%] h-[120%] opacity-10 pointer-events-none">
-          <div className="w-full h-full border-[1px] border-white/20 rounded-full animate-pulse" />
-          <div className="absolute inset-20 border-[1px] border-white/10 rounded-full" />
+        <div className="lg:col-span-5 bg-white flex items-center justify-center p-12 relative">
+          <motion.img 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.8 }}
+            src={featuredProduct.imageUrl} 
+            alt={featuredProduct.name}
+            className="w-full h-full object-contain relative z-10"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-[80%] h-[80%] border border-[#141414]/5 rounded-sm rotate-45" />
+            <div className="absolute w-full h-[1px] bg-[#141414]/10 top-1/2 -translate-y-1/2" />
+            <div className="absolute h-full w-[1px] bg-[#141414]/10 left-1/2 -translate-x-1/2" />
+          </div>
         </div>
       </section>
 
-      {/* Category Bar */}
-      <section className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`flex items-center gap-2 px-4 py-2 border rounded-sm font-mono text-[10px] uppercase tracking-wider transition-colors whitespace-nowrap ${
-              activeCategory === cat.id 
-                ? 'bg-[#141414] text-[#E4E3E0] border-[#141414]' 
-                : 'border-[#141414]/10 hover:border-[#141414]'
-            }`}
-          >
-            <cat.icon size={12} />
-            {cat.name}
-          </button>
-        ))}
+      {/* 02 // HARDWARE_MONITORING */}
+      <section className="bg-[#141414] text-[#E4E3E0] p-4 rounded-sm flex flex-wrap justify-between items-center gap-8 border-b-4 border-red-500">
+        <div className="flex items-center gap-12 overflow-x-auto no-scrollbar">
+          <div className="flex flex-col min-w-max">
+            <span className="font-mono text-[8px] uppercase tracking-widest opacity-40">Network_Core</span>
+            <span className="font-mono text-[10px] text-green-400">STATUS.SYNCHRONIZED</span>
+          </div>
+          <div className="flex flex-col min-w-max">
+            <span className="font-mono text-[8px] uppercase tracking-widest opacity-40">Active_Units</span>
+            <span className="font-mono text-[10px]">{products.length}_LOADED</span>
+          </div>
+          <div className="flex flex-col min-w-max">
+            <span className="font-mono text-[8px] uppercase tracking-widest opacity-40">Encryption</span>
+            <span className="font-mono text-[10px]">AES_256_ACTIVE</span>
+          </div>
+          <div className="flex flex-col min-w-max">
+            <span className="font-mono text-[8px] uppercase tracking-widest opacity-40">Server_Time</span>
+            <span className="font-mono text-[10px]">{new Date().toLocaleTimeString([], { hour12: false })}</span>
+          </div>
+        </div>
+        <div className="hidden md:flex gap-1">
+          {Array(8).fill(0).map((_, i) => (
+            <div key={i} className={`w-3 h-1 ${i < 6 ? 'bg-green-500' : 'bg-[#E4E3E0]/10'}`} />
+          ))}
+        </div>
       </section>
 
-      {/* Product Grid */}
-      <section>
-        <div className="flex justify-between items-end mb-8 border-b border-[#141414]/10 pb-4">
+      {/* 03 // BENTO_CATALOG */}
+      <section className="space-y-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#141414] pb-4">
           <div>
-            <h2 className="font-mono text-xs uppercase opacity-50 tracking-widest">Active List</h2>
-            <p className="text-xl font-bold tracking-tight uppercase">Hardware Catalog</p>
+            <h3 className="font-mono text-[10px] uppercase font-bold tracking-[0.5em] opacity-30">Hardware_Registry</h3>
+            <p className="text-2xl font-bold uppercase tracking-tighter">System Inventory</p>
           </div>
-          <div className="text-[10px] font-mono opacity-50">
-            TOTAL_ITEMS: {filteredProducts.length}
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`flex items-center gap-2 px-4 py-1.5 border rounded-sm font-mono text-[9px] uppercase tracking-wider transition-all whitespace-nowrap ${
+                  activeCategory === cat.id 
+                    ? 'bg-[#141414] text-[#E4E3E0] border-[#141414]' 
+                    : 'border-[#141414]/10 hover:border-[#141414]'
+                }`}
+              >
+                <cat.icon size={10} />
+                {cat.name}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-px bg-[#141414]/10 border border-[#141414]/10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 auto-rows-[300px]">
           {loading ? (
             Array(8).fill(0).map((_, i) => (
-              <div key={i} className="bg-[#F5F5F5] h-[400px] animate-pulse" />
+              <div key={i} className="bg-[#141414]/5 rounded-sm animate-pulse" />
             ))
           ) : (
-            filteredProducts.map((product) => (
-              <div key={product.id}>
-                <ProductCard product={product} />
-              </div>
-            ))
+            filteredProducts.map((product, index) => {
+              // Create a bento effect by making some items larger
+              const isLarge = index === 1 || index === 6;
+              const isWide = index === 4;
+              
+              return (
+                <div 
+                  key={product.id} 
+                  className={`
+                    ${isLarge ? 'md:col-span-2 md:row-span-2' : ''}
+                    ${isWide ? 'md:col-span-2' : ''}
+                  `}
+                >
+                  <ProductCard product={product} variant={isLarge ? 'large' : isWide ? 'wide' : 'base'} />
+                </div>
+              );
+            })
           )}
         </div>
       </section>
@@ -155,93 +216,67 @@ export function HomePage() {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, variant = 'base' }: { product: Product, variant?: 'base' | 'large' | 'wide' }) {
+  const { addToCart } = useCart();
+  
   return (
     <motion.div 
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="bg-[#F5F5F5] group relative overflow-hidden flex flex-col"
+      whileInView={{ opacity: 1 }}
+      className="bg-white group relative overflow-hidden flex flex-col h-full border border-[#141414]/5 rounded-sm hover:border-[#141414] transition-colors"
     >
-      <Link to={`/product/${product.id}`} className="flex-1 p-6 space-y-4">
-        <div className="aspect-square bg-white p-4 relative overflow-hidden rounded-sm border border-[#141414]/5">
+      <Link to={`/product/${product.id}`} className="flex-1 p-6 flex flex-col">
+        <div className={`relative flex items-center justify-center ${variant === 'large' ? 'flex-1' : 'h-40'}`}>
           <img 
             src={product.imageUrl} 
             alt={product.name}
-            className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-500"
+            className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-700"
             referrerPolicy="no-referrer"
           />
-          <div className="absolute top-2 left-2 px-2 py-0.5 bg-[#141414] text-[#E4E3E0] text-[8px] font-mono tracking-widest uppercase">
-            {product.category}
+          <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="bg-[#141414] text-white p-2 rounded-full">
+              <ArrowRight size={14} />
+            </div>
           </div>
         </div>
         
-        <div className="space-y-1">
-          <h3 className="font-bold text-sm tracking-tight group-hover:underline uppercase underline-offset-4 line-clamp-1">
-            {product.name}
-          </h3>
-          <div className="flex justify-between items-baseline">
-            <span className="font-mono text-xs">${product.price.toFixed(2)}</span>
-            <span className="font-mono text-[10px] opacity-40 uppercase">In Stock</span>
+        <div className="mt-6 flex flex-col gap-1">
+          <div className="flex justify-between items-start gap-4">
+            <h3 className={`font-bold uppercase tracking-tighter leading-tight ${variant === 'large' ? 'text-2xl' : 'text-sm'}`}>
+              {product.name}
+            </h3>
+            <span className="font-mono text-xs whitespace-nowrap">${product.price.toFixed(2)}</span>
           </div>
+          <span className="font-mono text-[9px] uppercase tracking-widest opacity-40">CAT_{product.category}</span>
+          
+          {variant === 'large' && (
+            <p className="mt-4 text-xs font-mono opacity-50 uppercase line-clamp-3">
+              {product.description}
+            </p>
+          )}
         </div>
       </Link>
       
-      <div className="p-4 pt-0">
-        <button className="w-full bg-[#141414]/5 hover:bg-[#141414] hover:text-[#E4E3E0] border border-transparent hover:border-[#141414] py-2 font-mono text-[9px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-2">
-          <ShoppingCart size={12} /> Add to System
+      <div className="p-4 border-t border-[#141414]/5 bg-[#F5F5F5]">
+        <button 
+          onClick={(e) => {
+            e.preventDefault();
+            addToCart(product);
+          }}
+          className="w-full flex items-center justify-center gap-2 font-mono text-[9px] uppercase font-bold tracking-[0.2em] py-2 hover:bg-[#141414] hover:text-white transition-colors"
+        >
+          <ShoppingCart size={12} /> Add_to_Buffer
         </button>
+      </div>
+      
+      {/* Decorative Corner */}
+      <div className="absolute top-0 left-0 w-8 h-8 pointer-events-none overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-[#141414]/10" />
+        <div className="absolute top-0 left-0 w-[1px] h-full bg-[#141414]/10" />
       </div>
     </motion.div>
   );
 }
 
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: '1',
-    name: 'Neural Engine M4X',
-    price: 1299.00,
-    category: 'processors',
-    imageUrl: 'https://images.unsplash.com/photo-1591405351990-4726e331f141?w=800&auto=format&fit=crop&q=60',
-    description: 'Ultra-low latency inference engine for real-time edge computing.'
-  },
-  {
-    id: '2',
-    name: 'Quantum X-Link Laptop',
-    price: 2499.00,
-    category: 'laptops',
-    imageUrl: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=800&auto=format&fit=crop&q=60',
-    description: 'Precision milled aluminum body with liquid flow cooling system.'
-  },
-  {
-    id: '3',
-    name: 'OmniFocus Pro Display',
-    price: 899.00,
-    category: 'audio',
-    imageUrl: 'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800&auto=format&fit=crop&q=60',
-    description: '4K panel with 100% Adobe RGB coverage and 500 nits brightness.'
-  },
-  {
-    id: '4',
-    name: 'Vector One Mobile',
-    price: 999.00,
-    category: 'mobile',
-    imageUrl: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=800&auto=format&fit=crop&q=60',
-    description: 'Titanium chassis with custom-built OS for maximum privacy.'
-  },
-  {
-    id: '5',
-    name: 'Pulse Zero Audio',
-    price: 349.00,
-    category: 'audio',
-    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=60',
-    description: 'Studio-grade monitor headphones with zero-latency wireless tech.'
-  },
-  {
-    id: '6',
-    name: 'Aero Mesh Router',
-    price: 199.00,
-    category: 'mobile',
-    imageUrl: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800&auto=format&fit=crop&q=60',
-    description: 'Multi-node gigabit mesh system with hardware-level encryption.'
-  },
-];
+
+
